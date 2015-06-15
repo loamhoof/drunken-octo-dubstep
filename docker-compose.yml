@@ -1,0 +1,16 @@
+script:
+  image: python:3
+  working_dir: /mnt
+  volumes:
+    - .:/mnt
+  links:
+   - db
+  environment:
+    PYTHONPATH: $PYTHONPATH:src
+    PYTHONUSERBASE: /mnt/vendor
+
+db:
+  image: postgres:9.4
+  working_dir: /mnt
+  volumes:
+    - .:/mnt
