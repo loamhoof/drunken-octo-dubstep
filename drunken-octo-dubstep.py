@@ -1,3 +1,6 @@
+"""
+Create a model with the bare minimum: a PK and a value
+"""
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -12,6 +15,9 @@ class TestModel(Base):
     value = Column(String)
 
 
+"""
+Wrap the session management in a context manager
+"""
 import os
 from contextlib import contextmanager
 from sqlalchemy import create_engine
@@ -31,10 +37,17 @@ def session_ctx_mgr():
     session.close()
 
 
+
+"""
+Insert some greenlet magic into generators
+"""
 from greenlet import greenlet
 
 
 def greenletify_gen(mapping):
+    """ This generator will be passed to bulk operations
+        Greenlets allow us to get out of the bulk methods
+        And thus run them concurrently """
     if mapping is None:
         raise StopIteration()
     yield mapping
@@ -42,23 +55,45 @@ def greenletify_gen(mapping):
         yield mapping
 
 
+"""
+Run different tests
+"""
 from sqlalchemy.exc import ResourceClosedError
 
 
+"""
+First test
+------------------------------------------------------
+Send a value to the `bulk_insert` operation first
+Then send one to the `bulk_update`
+To finish end the `bulk_insert` then the `bulk_update`
+------------------------------------------------------
+Result: ResourceClosedError
+"""
 with session_ctx_mgr() as session:
     insert_greenlet = greenlet(lambda mapping: session.bulk_insert_mappings(TestModel, greenletify_gen(mapping)))
     update_greenlet = greenlet(lambda mapping: session.bulk_update_mappings(TestModel, greenletify_gen(mapping)))
     print('Start with an insert first.')
     insert_greenlet.switch({'id': 2, 'value': 2})
     update_greenlet.switch({'id': 1, 'value': 2})
+    print('And end the bulk_insert first.')
+    insert_greenlet.switch(None)
     try:
-        print('And end the bulk_insert first.')
-        insert_greenlet.switch(None)
         update_greenlet.switch(None)
-        session.commit()
     except ResourceClosedError:
         print('This does not work.')
+    else:
+        session.commit()
 
+"""
+Second test
+--------------------------------------------------------------------
+Send a value to the `bulk_insert` operation first
+Then send one to the `bulk_update`
+But this time end the `bulk_update` first and then the `bulk_insert`
+--------------------------------------------------------------------
+Result: it works
+"""
 with session_ctx_mgr() as session:
     insert_greenlet = greenlet(lambda mapping: session.bulk_insert_mappings(TestModel, greenletify_gen(mapping)))
     update_greenlet = greenlet(lambda mapping: session.bulk_update_mappings(TestModel, greenletify_gen(mapping)))
@@ -71,6 +106,17 @@ with session_ctx_mgr() as session:
     session.commit()
     print('And it works.')
 
+"""
+Third test
+------------------------------------------------------
+Send a value to the `bulk_insert` operation first
+Then send one to the `bulk_update`
+Send other values to both operations
+Send the last value to the `bulk_insert`
+End the `bulk_update` first and then the `bulk_insert`
+------------------------------------------------------
+Result: it still works
+"""
 with session_ctx_mgr() as session:
     insert_greenlet = greenlet(lambda mapping: session.bulk_insert_mappings(TestModel, greenletify_gen(mapping)))
     update_greenlet = greenlet(lambda mapping: session.bulk_update_mappings(TestModel, greenletify_gen(mapping)))
@@ -84,3 +130,10 @@ with session_ctx_mgr() as session:
     insert_greenlet.switch(None)
     session.commit()
     print('Still works, what counts is the first operation.')
+
+"""
+Conclusion:
+What counts is to which operation is the first sent:
+- if sent to the `bulk_insert`, the `bulk_update` has to finish first
+- if sent to the `bulk_update`, the `bulk_insert` has to finish first
+"""
