@@ -1,44 +1,4 @@
 """
-Create a model with the bare minimum: a PK and a value
-"""
-from sqlalchemy import Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-
-
-Base = declarative_base()
-
-
-class TestModel(Base):
-    __tablename__ = 'test_model'
-
-    id = Column(Integer, primary_key=True)
-    value = Column(String)
-
-
-"""
-Wrap the session management in a context manager
-"""
-import os
-from contextlib import contextmanager
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
-
-
-@contextmanager
-def session_ctx_mgr():
-    db_addr, db_port = os.getenv('DB_PORT_5432_TCP_ADDR'), os.getenv('DB_PORT_5432_TCP_PORT')
-    db_uri = 'postgresql://postgres@%s:%s/postgres' % (db_addr, db_port)
-    session = scoped_session(sessionmaker(
-        autocommit=False,
-        autoflush=False,
-        bind=create_engine(db_uri, convert_unicode=True),
-    ))
-    yield session
-    session.close()
-
-
-
-"""
 Insert some greenlet magic into generators
 """
 from greenlet import greenlet
@@ -58,6 +18,8 @@ def greenletify_gen(mapping):
 """
 Run different tests
 """
+from test_model import TestModel
+from session_ctx_mgr import session_ctx_mgr
 from sqlalchemy.exc import ResourceClosedError
 
 
